@@ -47,7 +47,7 @@ mp_face_mesh = mp.solutions.face_mesh
 face_mesh = mp_face_mesh.FaceMesh(static_image_mode=False, max_num_faces=1, refine_landmarks=True, min_detection_confidence=0.5)
 
 # Load ảnh kính
-glasses = load_glasses('glasses7.jpeg')
+glasses = load_glasses('img/glasses4.png')
 
 # Các điểm chuẩn trên khuôn mặt để căn chỉnh kính
 LEFT_EYE = 33  # Khóe mắt trái
