@@ -4,111 +4,115 @@ import mediapipe as mp
 import os
 
 def load_glasses(path):
-    """Tải ảnh kính và đảm bảo ảnh có kênh alpha, xử lý ảnh có nền phức tạp"""
-    if not os.path.exists(path):
-        raise FileNotFoundError(f"Không tìm thấy file {path}")
-    
+    """Tải ảnh kính và xử lý alpha channel"""
     img = cv2.imread(path, cv2.IMREAD_UNCHANGED)
     if img is None:
-        raise ValueError(f"File {path} không phải ảnh hợp lệ")
+        raise ValueError(f"Không tải được ảnh kính từ {path}")
     
-    # Nếu ảnh không có kênh alpha (chỉ có BGR), ta sẽ tạo alpha
-    if img.shape[-1] == 3:  # Ảnh không có kênh alpha
+    # Thêm alpha channel nếu ảnh chỉ có 3 kênh
+    if img.shape[2] == 3:
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         _, alpha = cv2.threshold(gray, 240, 255, cv2.THRESH_BINARY_INV)
-        alpha = cv2.GaussianBlur(alpha, (5, 5), 0)  # Làm mượt alpha
-        img = cv2.merge((img, alpha))  # Thêm kênh alpha vào ảnh
+        alpha = cv2.GaussianBlur(alpha, (7,7), 0)
+        img = cv2.merge([img[:, :, 0], img[:, :, 1], img[:, :, 2], alpha])
     
     return img
 
-def remove_background(image):
-    """Dùng GrabCut để tách nền của ảnh kính"""
-    # Kiểm tra nếu ảnh có 4 kênh (BGR + Alpha)
-    if image.shape[2] == 4:
-        image = cv2.cvtColor(image, cv2.COLOR_BGRA2BGR)
-
-    # Khởi tạo mask và các mô hình cho GrabCut
-    mask = np.zeros(image.shape[:2], np.uint8)
-    bgd_model = np.zeros((1, 65), np.float64)
-    fgd_model = np.zeros((1, 65), np.float64)
-
-    # Cắt bỏ phần nền bằng GrabCut (thử dùng phương pháp tự động hơn)
-    rect = (10, 10, image.shape[1]-10, image.shape[0]-10)  # Vùng bao quanh kính
-    cv2.grabCut(image, mask, rect, bgd_model, fgd_model, 5, cv2.GC_INIT_WITH_RECT)
-
-    # Đánh dấu các khu vực nền là 0 và đối tượng là 1
-    mask2 = np.where((mask == 2) | (mask == 0), 0, 1).astype('uint8')
-    image = image * mask2[:, :, np.newaxis]
-
-    return image
-
-# Khởi tạo thư viện Mediapipe cho nhận diện khuôn mặt
 mp_face_mesh = mp.solutions.face_mesh
-face_mesh = mp_face_mesh.FaceMesh(static_image_mode=False, max_num_faces=1, refine_landmarks=True, min_detection_confidence=0.5)
-
-# Load ảnh kính
+face_mesh = mp_face_mesh.FaceMesh(
+    static_image_mode=False,
+    max_num_faces=1,
+    refine_landmarks=True,
+    min_detection_confidence=0.5,  # Giảm confidence để dễ detect hơn
+    min_tracking_confidence=0.5
+)
 glasses = load_glasses('img/glasses4.png')
+# Sử dụng các landmark chính xác cho mắt
+LEFT_EYE_INDICES = [362, 385, 387, 263, 373, 380]
+RIGHT_EYE_INDICES = [33, 160, 158, 133, 153, 144]
 
-# Các điểm chuẩn trên khuôn mặt để căn chỉnh kính
-LEFT_EYE = 33  # Khóe mắt trái
-RIGHT_EYE = 263  # Khóe mắt phải
-NOSE = 6  # Mũi làm tham chiếu chiều cao
-
-cap = cv2.VideoCapture(0)
-
+def get_eye_center(landmarks, eye_indices):
+    """Tính tọa độ trung tâm mắt từ các landmark"""
+    points = [
+        (landmarks.landmark[i].x, landmarks.landmark[i].y)
+        for i in eye_indices
+    ]
+    return np.mean(points, axis=0)
 
 def process_frame(frame: np.ndarray, glasses: np.ndarray) -> np.ndarray:
     rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     results = face_mesh.process(rgb_frame)
-
-    if results.multi_face_landmarks:
-        face_landmarks = results.multi_face_landmarks[0]
-
-        def get_coord(idx):
-            landmark = face_landmarks.landmark[idx]
-            return int(landmark.x * frame.shape[1]), int(landmark.y * frame.shape[0])
-
-        try:
-            left_eye = get_coord(LEFT_EYE)
-            right_eye = get_coord(RIGHT_EYE)
-            nose = get_coord(NOSE)
-
-            eye_center = ((left_eye[0] + right_eye[0]) // 2, (left_eye[1] + right_eye[1]) // 2)
-            eye_width = np.linalg.norm(np.array(left_eye) - np.array(right_eye))
-            angle = -np.degrees(np.arctan2(right_eye[1] - left_eye[1], right_eye[0] - left_eye[0]))
-            scale = eye_width * 2.0 / glasses.shape[1]
-
-            resized_glasses = cv2.resize(glasses, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
-            glass_img = resized_glasses[:, :, :3]
-            glass_alpha = resized_glasses[:, :, 3] / 255.0
-
-            pad = 50
-            glass_img = cv2.copyMakeBorder(glass_img, pad, pad, pad, pad, cv2.BORDER_CONSTANT, value=(0, 0, 0))
-            glass_alpha = cv2.copyMakeBorder(glass_alpha, pad, pad, pad, pad, cv2.BORDER_CONSTANT, value=0)
-
-            M = cv2.getRotationMatrix2D((glass_img.shape[1] // 2, glass_img.shape[0] // 2), angle, 1)
-            rotated_img = cv2.warpAffine(glass_img, M, (glass_img.shape[1], glass_img.shape[0]), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT, borderValue=(0, 0, 0))
-            rotated_alpha = cv2.warpAffine(glass_alpha, M, (glass_alpha.shape[1], glass_alpha.shape[0]), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT, borderValue=0)
-
-            x = eye_center[0] - rotated_img.shape[1] // 2
-            y = eye_center[1] - rotated_img.shape[0] // 2
-
-            x1, y1 = max(0, x), max(0, y)
-            x2, y2 = min(frame.shape[1], x + rotated_img.shape[1]), min(frame.shape[0], y + rotated_img.shape[0])
-
-            if x2 > x1 and y2 > y1:
-                region = frame[y1:y2, x1:x2]
-                glass_part = rotated_img[y1 - y:y2 - y, x1 - x:x2 - x]
-                alpha_part = rotated_alpha[y1 - y:y2 - y, x1 - x:x2 - x]
-                inv_alpha = 1.0 - alpha_part
-
-                for c in range(3):
-                    region[:, :, c] = (glass_part[:, :, c] * alpha_part) + (region[:, :, c] * inv_alpha)
-
-        except Exception as e:
-            print(f"Lỗi xử lý: {str(e)}")
-
+    
+    if not results.multi_face_landmarks:
+        print("Không detect được khuôn mặt!")
+        return frame
+    face_landmarks = results.multi_face_landmarks[0]
+    try:
+        # Lấy tọa độ normalized, chuyển sang pixel
+        left_eye_norm = get_eye_center(face_landmarks, LEFT_EYE_INDICES)
+        right_eye_norm = get_eye_center(face_landmarks, RIGHT_EYE_INDICES)
+        h, w = frame.shape[:2]
+        left_eye = (left_eye_norm[0] * w, left_eye_norm[1] * h)
+        right_eye = (right_eye_norm[0] * w, right_eye_norm[1] * h)
+        eye_center = ((left_eye[0] + right_eye[0])/2, (left_eye[1] + right_eye[1])/2)
+        eye_distance = np.linalg.norm(np.array(left_eye) - np.array(right_eye))
+        print(f"eye_distance: {eye_distance}")
+        if eye_distance < 5:  # Giá trị này tùy chỉnh, tránh lỗi chia cho số nhỏ
+            print("eye_distance quá nhỏ, bỏ qua frame này")
+            return frame
+        scale_factor = eye_distance * 3.2 / glasses.shape[1]
+        new_width = int(glasses.shape[1] * scale_factor)
+        new_height = int(glasses.shape[0] * scale_factor)
+        if new_width <= 0 or new_height <= 0:
+            print("Kích thước kính <= 0, bỏ qua frame này")
+            return frame
+        angle = -np.degrees(np.arctan2(right_eye[1]-left_eye[1], right_eye[0]-left_eye[0]))
+        resized_glasses = cv2.resize(glasses, (new_width, new_height))
+        M = cv2.getRotationMatrix2D(
+            (new_width//2, new_height//2),
+            angle,
+            1.0
+        )
+        rotated_glasses = cv2.warpAffine(
+            resized_glasses,
+            M,
+            (new_width, new_height),
+            flags=cv2.INTER_CUBIC,
+            borderMode=cv2.BORDER_CONSTANT,
+            borderValue=(0,0,0,0)
+        )
+        # Bỏ lật kính, chỉ giữ xoay theo góc khuôn mặt
+        # rotated_glasses = cv2.flip(rotated_glasses, 1)
+        # Điều chỉnh vị trí kính cho tự nhiên hơn (dễ chỉnh bằng offset)
+        x = int(eye_center[0] - new_width // 2)
+        y = int(eye_center[1] - new_height // 2.2)  # Dịch lên gần mắt hơn
+        overlay_img(frame, rotated_glasses, x, y)
+    except Exception as e:
+        print(f"Lỗi khi xử lý kính: {str(e)}")
     return frame
 
-
-
+def overlay_img(background, overlay, x, y):
+    """Overlay ảnh RGBA lên BGR, kiểm tra biên"""
+    h, w = overlay.shape[:2]
+    bg_h, bg_w = background.shape[:2]
+    if x < 0:
+        overlay = overlay[:, -x:]
+        w = overlay.shape[1]
+        x = 0
+    if y < 0:
+        overlay = overlay[-y:, :]
+        h = overlay.shape[0]
+        y = 0
+    if x + w > bg_w:
+        overlay = overlay[:, :bg_w - x]
+        w = overlay.shape[1]
+    if y + h > bg_h:
+        overlay = overlay[:bg_h - y, :]
+        h = overlay.shape[0]
+    if w <= 0 or h <= 0:
+        return
+    alpha = overlay[:, :, 3] / 255.0
+    for c in range(3):
+        background[y:y+h, x:x+w, c] = (
+            overlay[:, :, c] * alpha + background[y:y+h, x:x+w, c] * (1 - alpha)
+        )
