@@ -3,7 +3,7 @@ import numpy as np
 import mediapipe as mp
 import os
 
-def load_glasses(path):
+def load_glasses(path):   
     """Tải ảnh kính và xử lý alpha channel, tự động chuyển ảnh lỗi về đúng định dạng"""
     img = cv2.imread(path, cv2.IMREAD_UNCHANGED)
     if img is None:
