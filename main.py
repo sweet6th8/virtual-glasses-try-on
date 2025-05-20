@@ -54,6 +54,16 @@ async def websocket_endpoint(websocket: WebSocket):
                     print("Không tải được ảnh kính từ URL:", glasses_url)
                     continue
 
+                # Xử lý ảnh kính để đảm bảo có alpha channel
+                # Xử lý alpha channel cho ảnh kính nếu thiếu
+                if len(glasses_img.shape) == 2:  # Grayscale
+                    glasses_img = cv2.cvtColor(glasses_img, cv2.COLOR_GRAY2BGR)
+                if glasses_img.shape[2] == 3:  # BGR
+                    gray = cv2.cvtColor(glasses_img, cv2.COLOR_BGR2GRAY)
+                    _, alpha = cv2.threshold(gray, 240, 255, cv2.THRESH_BINARY_INV)
+                    alpha = cv2.GaussianBlur(alpha, (7, 7), 0)
+                    glasses_img = cv2.merge([glasses_img[:, :, 0], glasses_img[:, :, 1], glasses_img[:, :, 2], alpha])
+
                 processed_frame = process_frame(frame, glasses_img)
                 _, buffer = cv2.imencode('.png', processed_frame)
                 encoded = base64.b64encode(buffer).decode()
