@@ -81,11 +81,12 @@ def process_frame(frame: np.ndarray, glasses: np.ndarray) -> np.ndarray:
             borderMode=cv2.BORDER_CONSTANT,
             borderValue=(0,0,0,0)
         )
-        # Bỏ lật kính, chỉ giữ xoay theo góc khuôn mặt
-        # rotated_glasses = cv2.flip(rotated_glasses, 1)
-        # Điều chỉnh vị trí kính cho tự nhiên hơn (dễ chỉnh bằng offset)
+        # Lật kính ngang lại cho đúng chiều
+        rotated_glasses = cv2.flip(rotated_glasses, 1)
+        # Xoay kính 180 độ nếu bị ngược dọc
+        rotated_glasses = cv2.rotate(rotated_glasses, cv2.ROTATE_180)
         x = int(eye_center[0] - new_width // 2)
-        y = int(eye_center[1] - new_height // 2.2)  # Dịch lên gần mắt hơn
+        y = int(eye_center[1] - new_height // 2.2)
         overlay_img(frame, rotated_glasses, x, y)
     except Exception as e:
         print(f"Lỗi khi xử lý kính: {str(e)}")
