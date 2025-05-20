@@ -4,18 +4,20 @@ import mediapipe as mp
 import os
 
 def load_glasses(path):
-    """Tải ảnh kính và xử lý alpha channel"""
+    """Tải ảnh kính và xử lý alpha channel, tự động chuyển ảnh lỗi về đúng định dạng"""
     img = cv2.imread(path, cv2.IMREAD_UNCHANGED)
     if img is None:
         raise ValueError(f"Không tải được ảnh kính từ {path}")
-    
-    # Thêm alpha channel nếu ảnh chỉ có 3 kênh
+    # Nếu ảnh chỉ có 1 kênh (grayscale), chuyển sang BGR
+    if len(img.shape) == 2:
+        img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+    # Nếu ảnh chỉ có 3 kênh, thêm alpha channel
     if img.shape[2] == 3:
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         _, alpha = cv2.threshold(gray, 240, 255, cv2.THRESH_BINARY_INV)
         alpha = cv2.GaussianBlur(alpha, (7,7), 0)
         img = cv2.merge([img[:, :, 0], img[:, :, 1], img[:, :, 2], alpha])
-    
+    # Nếu ảnh đã có 4 kênh thì giữ nguyên
     return img
 
 mp_face_mesh = mp.solutions.face_mesh
@@ -26,7 +28,7 @@ face_mesh = mp_face_mesh.FaceMesh(
     min_detection_confidence=0.5,  # Giảm confidence để dễ detect hơn
     min_tracking_confidence=0.5
 )
-glasses = load_glasses('img/glasses4.png')
+glasses = load_glasses('img/glasses5.png')
 # Sử dụng các landmark chính xác cho mắt
 LEFT_EYE_INDICES = [362, 385, 387, 263, 373, 380]
 RIGHT_EYE_INDICES = [33, 160, 158, 133, 153, 144]
