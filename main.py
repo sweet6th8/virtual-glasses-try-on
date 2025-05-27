@@ -20,7 +20,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
+# Nhận/gửi dữ liệu qua WebSocket với FE, xử lý ảnh và trả kết quả về
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
@@ -55,7 +55,6 @@ async def websocket_endpoint(websocket: WebSocket):
                     continue
 
                 # Xử lý ảnh kính để đảm bảo có alpha channel
-                # Xử lý alpha channel cho ảnh kính nếu thiếu
                 if len(glasses_img.shape) == 2:  # Grayscale
                     glasses_img = cv2.cvtColor(glasses_img, cv2.COLOR_GRAY2BGR)
                 if glasses_img.shape[2] == 3:  # BGR

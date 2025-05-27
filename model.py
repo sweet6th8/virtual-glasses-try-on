@@ -3,6 +3,7 @@ import numpy as np
 import mediapipe as mp
 import os
 
+
 def load_glasses(path):   
     """Tải ảnh kính và xử lý alpha channel, tự động chuyển ảnh lỗi về đúng định dạng"""
     img = cv2.imread(path, cv2.IMREAD_UNCHANGED)
@@ -33,14 +34,15 @@ glasses = load_glasses('img/glasses5.png')
 LEFT_EYE_INDICES = [362, 385, 387, 263, 373, 380]
 RIGHT_EYE_INDICES = [33, 160, 158, 133, 153, 144]
 
-def get_eye_center(landmarks, eye_indices):
-    """Tính tọa độ trung tâm mắt từ các landmark"""
+# Tính tọa độ trung tâm mắt từ các landmark
+def get_eye_center(landmarks, eye_indices):   
     points = [
         (landmarks.landmark[i].x, landmarks.landmark[i].y)
         for i in eye_indices
     ]
     return np.mean(points, axis=0)
 
+# Xử lý ảnh các frame từ webcam, phát hiện khuôn mặt, overlay kính lên đúng vị trí mắt
 def process_frame(frame: np.ndarray, glasses: np.ndarray) -> np.ndarray:
     rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     results = face_mesh.process(rgb_frame)
@@ -94,8 +96,8 @@ def process_frame(frame: np.ndarray, glasses: np.ndarray) -> np.ndarray:
         print(f"Lỗi khi xử lý kính: {str(e)}")
     return frame
 
+# Hàm overlay ảnh với alpha channel
 def overlay_img(background, overlay, x, y):
-    """Overlay ảnh RGBA lên BGR, kiểm tra biên"""
     h, w = overlay.shape[:2]
     bg_h, bg_w = background.shape[:2]
     if x < 0:
