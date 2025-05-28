@@ -34,6 +34,7 @@ glasses = load_glasses('img/glasses5.png')
 LEFT_EYE_INDICES = [362, 385, 387, 263, 373, 380]
 RIGHT_EYE_INDICES = [33, 160, 158, 133, 153, 144]
 
+# [Bước 3.14.2 Tính toán landmark]
 # Tính tọa độ trung tâm mắt từ các landmark
 def get_eye_center(landmarks, eye_indices):   
     points = [
@@ -41,7 +42,7 @@ def get_eye_center(landmarks, eye_indices):
         for i in eye_indices
     ]
     return np.mean(points, axis=0)
-
+# [Bước 3.14.1 Xử lí frame]
 # Xử lý ảnh các frame từ webcam, phát hiện khuôn mặt, overlay kính lên đúng vị trí mắt
 def process_frame(frame: np.ndarray, glasses: np.ndarray) -> np.ndarray:
     rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -94,8 +95,10 @@ def process_frame(frame: np.ndarray, glasses: np.ndarray) -> np.ndarray:
         overlay_img(frame, rotated_glasses, x, y)
     except Exception as e:
         print(f"Lỗi khi xử lý kính: {str(e)}")
+    # [Bước 3.14.4 Trả ảnh đã xử lý]
     return frame
 
+# [Bước 3.14.3 Hàm overlay ảnh với alpha channel]
 # Hàm overlay ảnh với alpha channel
 def overlay_img(background, overlay, x, y):
     h, w = overlay.shape[:2]

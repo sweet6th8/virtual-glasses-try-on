@@ -66,6 +66,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 processed_frame = process_frame(frame, glasses_img)
                 _, buffer = cv2.imencode('.png', processed_frame)
                 encoded = base64.b64encode(buffer).decode()
+                # [Bước 3.15 Trả ảnh cho FE]
                 await websocket.send_text(f"data:image/png;base64,{encoded}")
 
             except Exception as e:
